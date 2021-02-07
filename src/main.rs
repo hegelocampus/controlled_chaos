@@ -1,4 +1,5 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, anyhow, Result};
+use languages::Language;
 use git2::{build, Cred, FetchOptions, RemoteCallbacks, Repository};
 use std::env;
 use std::fs::create_dir;
@@ -48,7 +49,6 @@ fn get_local_checkout(
     Ok(repo)
 }
 
-
 fn main() -> Result<()> {
     let base_path = Path::new("./.local_checkouts/");
     if !base_path.exists() {
@@ -62,12 +62,11 @@ fn main() -> Result<()> {
     let project_remote = "git@github.com:hegelocampus/portfolio.git";
     let project_language = Language::JavaScript;
 
-    let ssh_pass = &env::var("CCCI_SSH_PASS").unwrap();
+    let ssh_pass = &env::var("CCCI_SSH_PASS").context("CCCI_SSH_PASS environment variable is not defined, please define this to use ssh git remote URLs")?;
     // This builder will be reused for all repositories
     let builder = setup_repo_builder(&ssh_pass);
     let repo = get_local_checkout(builder, base_path, project_name, project_remote)?;
-    let new_dep_versions = language.try_update(repo)?;
-
+    let new_dep_versions = project_language.try_update(&repo)?;
 
     println!("{:?}", repo.path());
     Ok(())
