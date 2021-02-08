@@ -1,6 +1,6 @@
-use anyhow::{Context, anyhow, Result};
-use languages::Language;
+use anyhow::{anyhow, Context, Result};
 use git2::{build, Cred, FetchOptions, RemoteCallbacks, Repository};
+use languages::Language;
 use std::env;
 use std::fs::create_dir;
 use std::path::Path;

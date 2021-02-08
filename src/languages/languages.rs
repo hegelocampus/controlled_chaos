@@ -1,17 +1,16 @@
 mod javascript;
 
-use std::path::Path;
-use std::collections::HashSet;
 use anyhow::{anyhow, Result};
 use git2::Repository;
 use javascript::{update_js_repository, JSConfig};
+use std::collections::HashSet;
+use std::path::Path;
 
 #[derive(Debug)]
 pub enum Language {
     Rust,
     JavaScript,
     Python,
-    Ruby,
 }
 
 impl Language {
