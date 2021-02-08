@@ -32,12 +32,10 @@ fn setup_repo_builder(ssh_pass: &str) -> build::RepoBuilder {
 /// Get or create a local checkout of the desired project as a `Repository` struct
 fn get_local_checkout(
     mut builder: build::RepoBuilder,
-    base_path: &Path,
+    local_path: &Path,
     project_name: &str,
     project_remote: &str,
 ) -> Result<Repository> {
-    let local_path = base_path.join(project_name);
-
     // Best way to do this is probably to maintain a local check out of the repository. First step then
     // is probably to verify that we have that, and if we don't create it.
     let repo = match Repository::open(&local_path) {
@@ -61,13 +59,14 @@ fn main() -> Result<()> {
     let project_name = "portfolio";
     let project_remote = "git@github.com:hegelocampus/portfolio.git";
     let project_language = Language::JavaScript;
+    let local_path = base_path.join(project_name);
 
     let ssh_pass = &env::var("CCCI_SSH_PASS").context("CCCI_SSH_PASS environment variable is not defined, please define this to use ssh git remote URLs")?;
     // This builder will be reused for all repositories
     let builder = setup_repo_builder(&ssh_pass);
-    let repo = get_local_checkout(builder, base_path, project_name, project_remote)?;
-    let new_dep_versions = project_language.try_update(&repo)?;
+    let repo = get_local_checkout(builder, &local_path, project_name, project_remote)?;
 
-    println!("{:?}", repo.path());
+    let new_dep_versions = project_language.try_update(&repo, &local_path)?;
+
     Ok(())
 }

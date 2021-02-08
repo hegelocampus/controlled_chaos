@@ -9,6 +9,8 @@ edition = "2018"
 [dependencies]
 anyhow = { version = "1.0.38" }
 git2 = { version = "0.13.17" }
+json = { version = "0.12.4" }
+regex = { version = "1.4.3" }
 
 [lib]
 name = "languages"
