@@ -1,9 +1,8 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use git2::Repository;
 use json::parse;
 use regex::Regex;
 use std::collections::HashSet;
-use std::io::{self, stderr, stdout, Write};
 use std::path::Path;
 use std::process::Command;
 use std::str;
@@ -14,7 +13,7 @@ use std::str;
 pub struct JSConfig {}
 
 pub fn update_js_repository(
-    repo: &Repository,
+    _repo: &Repository,
     local_pth: &Path,
     _cfg: Option<JSConfig>,
 ) -> Result<HashSet<String>> {

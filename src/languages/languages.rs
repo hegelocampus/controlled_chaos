@@ -2,9 +2,11 @@ mod javascript;
 
 use anyhow::{anyhow, Result};
 use git2::Repository;
-use javascript::{update_js_repository, JSConfig};
-use std::collections::HashSet;
-use std::path::Path;
+use javascript::{update_js_repository};
+use std::{
+    collections::HashSet,
+    path::Path,
+};
 
 #[derive(Debug)]
 pub enum Language {
@@ -27,7 +29,7 @@ impl Language {
         }
     }
 
-    pub fn try_build(&self, repo: &Repository) -> Result<()> {
+    pub fn try_build(&self, _repo: &Repository) -> Result<()> {
         Ok(())
     }
 }

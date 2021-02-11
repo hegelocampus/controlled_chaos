@@ -1,9 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use git2::{build, Cred, FetchOptions, RemoteCallbacks, Repository};
 use languages::Language;
-use std::env;
-use std::fs::create_dir;
-use std::path::Path;
+use std::{
+    env,
+    fs::create_dir,
+    io::{self, Write},
+    path::Path,
+    process::Command,
+};
 
 fn setup_repo_builder(ssh_pass: &str) -> build::RepoBuilder {
     // Setup callbacks for ssh
@@ -33,7 +37,6 @@ fn setup_repo_builder(ssh_pass: &str) -> build::RepoBuilder {
 fn get_local_checkout(
     mut builder: build::RepoBuilder,
     local_path: &Path,
-    project_name: &str,
     project_remote: &str,
 ) -> Result<Repository> {
     // Best way to do this is probably to maintain a local check out of the repository. First step then
@@ -47,6 +50,22 @@ fn get_local_checkout(
     Ok(repo)
 }
 
+fn run_tests(local_path: &Path, tests: Vec<&str>) -> Result<()> {
+    for test in tests.iter() {
+        let cmd_parts: Vec<&str> = test.split(' ').collect();
+        let output = Command::new(cmd_parts[0])
+            .current_dir(local_path)
+            .args(&cmd_parts[1..])
+            .output()?;
+        if !output.status.success() {
+            eprintln!("Error: test \"{}\" failed with the following output:", test);
+            io::stderr().write_all(&output.stderr).unwrap();
+            return Err(anyhow!("The following test Test failed: {}", test));
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let base_path = Path::new("./.local_checkouts/");
     if !base_path.exists() {
@@ -58,15 +77,33 @@ fn main() -> Result<()> {
     // This will all go in a JSON/YAML file
     let project_name = "portfolio";
     let project_remote = "git@github.com:hegelocampus/portfolio.git";
+    let test_steps = vec!["yarn test"];
     let project_language = Language::JavaScript;
     let local_path = base_path.join(project_name);
 
-    let ssh_pass = &env::var("CCCI_SSH_PASS").context("CCCI_SSH_PASS environment variable is not defined, please define this to use ssh git remote URLs")?;
-    // This builder will be reused for all repositories
-    let builder = setup_repo_builder(&ssh_pass);
-    let repo = get_local_checkout(builder, &local_path, project_name, project_remote)?;
+    let ssh_pass = &env::var("CCCI_SSH_PASS")
+        .context("CCCI_SSH_PASS environment variable is not defined, please define this to use ssh git remote URLs")?;
 
-    let new_dep_versions = project_language.try_update(&repo, &local_path)?;
+    // This builder may be reused for all repositories
+    println!(
+        "Finding or fetching local repository for {}...",
+        project_name
+    );
+    let builder = setup_repo_builder(&ssh_pass);
+    let repo = get_local_checkout(builder, &local_path, project_remote)?;
+
+    println!("Atempting to update {}...", project_name);
+    let _new_dep_versions = project_language.try_update(&repo, &local_path)?;
+    // TODO: Check new_dep_versions against known bad versions
+
+    //Test
+    println!("Update succeeded! Running tests...");
+    run_tests(&local_path, test_steps)?;
+
+    println!("Tests succeeded! Commiting changes to remote...");
+    // Commit changes
+
+    // Deploy
 
     Ok(())
 }
