@@ -50,6 +50,7 @@ fn get_local_checkout(
     Ok(repo)
 }
 
+
 fn run_tests(local_path: &Path, tests: Vec<&str>) -> Result<()> {
     for test in tests.iter() {
         let cmd_parts: Vec<&str> = test.split(' ').collect();
@@ -64,6 +65,33 @@ fn run_tests(local_path: &Path, tests: Vec<&str>) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn commit_changes_to_remote(
+    repo: &Repository,
+    project_remote: &str,
+) -> Result<()> {
+    let mut index = repo.index()?;
+    let oid = index.write_tree()?;
+    let tree = repo.find_tree(oid)?;
+
+    let signature = repo.signature()?;
+    let parents = repo.find_reference(branch)
+        .and_then(|x| x.peel_to_commit())?;
+
+    let commit_buff = repo.commit_create_buffer(
+        &sig,
+        &sig,
+        "Update dependencies",
+        &tree,
+        &parents
+    );
+    let commit_str = str::from_utf8(&commit_buff)?;
+
+    repo.commit_signed(
+        &contents,
+        commit_str,
+    )?
 }
 
 fn main() -> Result<()> {
