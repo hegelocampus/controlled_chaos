@@ -1,7 +1,16 @@
 use anyhow::{anyhow, Context, Result};
-use git2::{build, Cred, FetchOptions, RemoteCallbacks, Repository};
+use git2::{
+    Oid,
+    build,
+    Cred,
+    IndexAddOption,
+    FetchOptions,
+    RemoteCallbacks,
+    Repository,
+};
 use languages::Language;
 use std::{
+    str,
     env,
     fs::create_dir,
     io::{self, Write},
@@ -33,6 +42,8 @@ fn setup_repo_builder(ssh_pass: &str) -> build::RepoBuilder {
 
 // Because the compiler says builder must be passed in as mutable here, I'm concerned the builder
 // may not be able to be reused, as I intended. We'll see...
+// I need to make sure we pull the most recent changes from the master for already existing
+// repositories.
 /// Get or create a local checkout of the desired project as a `Repository` struct
 fn get_local_checkout(
     mut builder: build::RepoBuilder,
@@ -67,39 +78,113 @@ fn run_tests(local_path: &Path, tests: Vec<&str>) -> Result<()> {
     Ok(())
 }
 
-fn commit_changes_to_remote(
+fn create_commit(
     repo: &Repository,
-    project_remote: &str,
-) -> Result<()> {
+) -> Result<Option<Oid>> {
     let mut index = repo.index()?;
+
+    if index.is_empty() {
+        // Early return if there are no changed files
+        return Ok(None);
+    }
+
+    // Update the index to include all file changes.
+    index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
+
     let oid = index.write_tree()?;
     let tree = repo.find_tree(oid)?;
 
     let signature = repo.signature()?;
-    let parents = repo.find_reference(branch)
+    let parents = repo.find_reference("HEAD")
         .and_then(|x| x.peel_to_commit())?;
 
     let commit_buff = repo.commit_create_buffer(
-        &sig,
-        &sig,
-        "Update dependencies",
+        &signature,
+        &signature,
+        "CCCD: Update dependencies",
         &tree,
-        &parents
-    );
+        &[&parents],
+    )?;
     let commit_str = str::from_utf8(&commit_buff)?;
 
-    repo.commit_signed(
-        &contents,
+    let commit_id = repo.commit_signed(
+        &commit_str,
         commit_str,
-    )?
+        None,
+    )?;
+    repo.head()?
+        .set_target(commit_id, "CCCD: add signed commit with updated dependencies")?;
+    Ok(Some(commit_id))
+}
+
+// fn pull_from_remote() -> Result<()> {}
+
+/// find the origin of the git repo, with the following strategy:
+/// find the branch that HEAD points to, and read the remote configured for that branch
+/// returns the remote and the name of the local branch
+fn find_origin(repo: &git2::Repository) -> Result<(git2::Remote, String)> {
+    for branch in repo.branches(Some(git2::BranchType::Local))? {
+        let b = branch?.0;
+        if b.is_head() {
+            let upstream_name_buf = repo.branch_upstream_remote(&format!(
+                "refs/heads/{}",
+                &b.name()?
+            ))?;
+            let upstream_name = upstream_name_buf
+                .as_str()
+            let origin = repo.find_remote(&upstream_name)?;
+            return Ok((origin, b.name()?.to_string()));
+        }
+    }
+
+    Err(Error::Generic("no remotes configured"))
+}
+
+fn push_to_remote(
+    repo: &Repository,
+    commit_id: Oid,
+    project_remote: &str,
+    origin_branch: &str,
+) -> Result<()> {
+    println!("commit_id: {:?}", commit_id);
+    let mut ref_status = None;
+    let (mut origin, branch_name) = find_origin(&repo)?;
+
+    let res = {
+        let mut callbacks = git2::RemoteCallbacks::new();
+        callbacks.credentials(|_url, username, allowed| {
+            cred(&mut tried_ssh_key, _url, username, allowed)
+        });
+        callbacks.push_update_reference(|refname, status| {
+            assert_eq!(refname, format!("refs/heads/{}", branch_name));
+            ref_status = status.map(|s| s.to_string());
+            Ok(())
+        });
+        let mut opts = git2::PushOptions::new();
+        opts.remote_callbacks(callbacks);
+        let upstream_name_buf = repo.branch_upstream_remote(hformat!(
+                "refs/heads/{}",
+        );
+        origin.push(&[format!("refs/heads/{}", branch_name)], Some(&mut opts))
+    };
+    match res {
+        Ok(()) if ref_status.is_none() => Ok(()),
+        Ok(()) => Err(Error::GenericDyn(format!(
+            "failed to push a ref: {:?}",
+            ref_status
+        ))),
+        Err(e) => Err(Error::GenericDyn(format!("failure to push: {}", e))),
+    }
 }
 
 fn main() -> Result<()> {
+    let should_test = false;
     let base_path = Path::new("./.local_checkouts/");
     if !base_path.exists() {
         // If this fails it will be because the parent doesn't exist, which would mean someting is
         // seriously wrong, or the current user doesn't have permission to create the directory.
-        create_dir(base_path)?;
+        create_dir(base_path)
+            .context(format!("could not create directory at {:#?}, are you sure you have correct permissions to read and write that file?", base_path))?;
     }
 
     // This will all go in a JSON/YAML file
@@ -125,11 +210,20 @@ fn main() -> Result<()> {
     // TODO: Check new_dep_versions against known bad versions
 
     //Test
-    println!("Update succeeded! Running tests...");
-    run_tests(&local_path, test_steps)?;
+    if should_test {
+        println!("Update succeeded! Running tests...");
+        run_tests(&local_path, test_steps)?;
+    } else {
+        println!("Update succeeded! Skipping tests");
+    }
 
     println!("Tests succeeded! Commiting changes to remote...");
     // Commit changes
+    let commit_id = create_commit(&repo)?;
+    match commit_id {
+        Some(id) => push_to_remote(&repo, id, project_remote, "master")?,
+        None => println!("No changes were detected"),
+    }
 
     // Deploy
 
