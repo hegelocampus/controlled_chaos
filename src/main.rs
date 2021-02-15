@@ -18,7 +18,7 @@ use std::{
     process::Command,
 };
 
-fn setup_repo_builder(ssh_pass: &str) -> build::RepoBuilder {
+fn build_cred_callbacks(ssh_pass: &str) -> RemoteCallbacks {
     // Setup callbacks for ssh
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(move |_url, username_from_url, _allowed_types| {
@@ -29,10 +29,15 @@ fn setup_repo_builder(ssh_pass: &str) -> build::RepoBuilder {
             Some(&ssh_pass.to_owned()),
         )
     });
+    callbacks
+}
+
+fn setup_repo_builder<'a>(ssh_pass: &str) -> build::RepoBuilder {
+    let remote_callbacks = build_cred_callbacks(ssh_pass);
 
     // set fetch options.
     let mut fetch_opts = FetchOptions::new();
-    fetch_opts.remote_callbacks(callbacks);
+    fetch_opts.remote_callbacks(remote_callbacks);
 
     // setup builder.
     let mut builder = build::RepoBuilder::new();
@@ -126,20 +131,23 @@ fn find_origin(repo: &git2::Repository) -> Result<(git2::Remote, String)> {
     for branch in repo.branches(Some(git2::BranchType::Local))? {
         let b = branch?.0;
         if b.is_head() {
+            let parsed_name = &b.name()?.unwrap_or("None");
             let upstream_name_buf = repo.branch_upstream_remote(&format!(
                 "refs/heads/{}",
-                &b.name()?
+                parsed_name
             ))?;
             let upstream_name = upstream_name_buf
-                .as_str()
+                .as_str().unwrap();
             let origin = repo.find_remote(&upstream_name)?;
-            return Ok((origin, b.name()?.to_string()));
+            return Ok((origin, parsed_name.to_string()));
         }
     }
 
-    Err(Error::Generic("no remotes configured"))
+    Err(anyhow!("no remotes configured"))
 }
 
+// Shamelessly adapted from cortex/ripasso/src/pass.rs
+// https://github.com/cortex/ripasso/blob/master/src/pass.rs
 fn push_to_remote(
     repo: &Repository,
     commit_id: Oid,
@@ -149,17 +157,10 @@ fn push_to_remote(
     println!("commit_id: {:?}", commit_id);
     let mut ref_status = None;
     let (mut origin, branch_name) = find_origin(&repo)?;
+    Ok(())
 
+    /*
     let res = {
-        let mut callbacks = git2::RemoteCallbacks::new();
-        callbacks.credentials(|_url, username, allowed| {
-            cred(&mut tried_ssh_key, _url, username, allowed)
-        });
-        callbacks.push_update_reference(|refname, status| {
-            assert_eq!(refname, format!("refs/heads/{}", branch_name));
-            ref_status = status.map(|s| s.to_string());
-            Ok(())
-        });
         let mut opts = git2::PushOptions::new();
         opts.remote_callbacks(callbacks);
         let upstream_name_buf = repo.branch_upstream_remote(hformat!(
@@ -175,6 +176,7 @@ fn push_to_remote(
         ))),
         Err(e) => Err(Error::GenericDyn(format!("failure to push: {}", e))),
     }
+*/
 }
 
 fn main() -> Result<()> {
