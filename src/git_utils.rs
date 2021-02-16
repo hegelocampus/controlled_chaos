@@ -1,10 +1,6 @@
-use git2::{build, Cred, FetchOptions, IndexAddOption, Oid, RemoteCallbacks, Repository};
 use anyhow::{anyhow, Result};
-use std::{
-    env,
-    str,
-    path::Path,
-};
+use git2::{build, Cred, FetchOptions, IndexAddOption, Oid, RemoteCallbacks, Repository};
+use std::{env, path::Path, str};
 
 // fn pull_from_remote() -> Result<()> {}
 
@@ -131,11 +127,7 @@ fn find_origin(repo: &git2::Repository) -> Result<(git2::Remote, String)> {
 
 // Shamelessly adapted/stolen from cortex/ripasso/src/pass.rs
 // https://github.com/cortex/ripasso/blob/master/src/pass.rs
-pub fn push_to_remote(
-    repo: &Repository,
-    commit_id: Oid,
-    ssh_pass: &str,
-) -> Result<()> {
+pub fn push_to_remote(repo: &Repository, commit_id: Oid, ssh_pass: &str) -> Result<()> {
     println!("commit_id: {:?}", commit_id);
     let (mut origin, branch_name) = find_origin(&repo)?;
     let mut ref_status = None;
@@ -153,11 +145,7 @@ pub fn push_to_remote(
     };
     match res {
         Ok(()) if ref_status.is_none() => Ok(()),
-        Ok(()) => Err(anyhow!(
-            "failed to push a ref: {:?}",
-            ref_status
-        )),
+        Ok(()) => Err(anyhow!("failed to push a ref: {:?}", ref_status)),
         Err(e) => Err(anyhow!(format!("failure to push: {}", e))),
     }
 }
-

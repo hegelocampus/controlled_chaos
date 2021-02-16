@@ -1,12 +1,7 @@
 pub(crate) mod git_utils;
 
+use crate::git_utils::{create_commit, get_local_checkout, push_to_remote, setup_repo_builder};
 use anyhow::{anyhow, Context, Result};
-use crate::git_utils::{
-    push_to_remote,
-    setup_repo_builder,
-    get_local_checkout,
-    create_commit,
-};
 use languages::Language;
 use std::{
     env,
@@ -47,6 +42,7 @@ fn main() -> Result<()> {
     let project_name = "portfolio";
     let project_remote = "git@github.com:hegelocampus/portfolio.git";
     let test_steps = vec!["yarn test"];
+    let deployment_steps = vec!["yarn gulp build", "firebase deploy"];
     let project_language = Language::JavaScript;
     let local_path = base_path.join(project_name);
 
